@@ -1,0 +1,92 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "cjs"
+  importFileExtension = ""
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum NotificationType {
+  NEW_MESSAGE
+  ADDED_TO_CONVERSATION
+}
+
+model User {
+  id                String         @id @default(uuid()) @db.Uuid
+  email             String         @unique
+  name              String
+  passwordHash      String         @map("password_hash")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  participations    Participant[]
+  messages          Message[]
+  notifications     Notification[]
+  conversationsMade Conversation[]
+
+  @@map("users")
+}
+
+/// lastSeq is the sequence number of the newest message. Incrementing it locks the row,
+/// which is what makes concurrent senders take turns and keeps sequence numbers gap-free.
+model Conversation {
+  id            String        @id @default(uuid()) @db.Uuid
+  title         String?
+  createdById   String        @map("created_by_id") @db.Uuid
+  lastSeq       Int           @default(0) @map("last_seq")
+  lastMessageAt DateTime?     @map("last_message_at")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  createdBy     User          @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  participants  Participant[]
+  messages      Message[]
+
+  @@map("conversations")
+}
+
+/// lastReadSeq: the user has read everything up to this sequence number.
+model Participant {
+  id             String       @id @default(uuid()) @db.Uuid
+  conversationId String       @map("conversation_id") @db.Uuid
+  userId         String       @map("user_id") @db.Uuid
+  lastReadSeq    Int          @default(0) @map("last_read_seq")
+  joinedAt       DateTime     @default(now()) @map("joined_at")
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+  @@map("participants")
+}
+
+model Message {
+  id             String       @id @default(uuid()) @db.Uuid
+  conversationId String       @map("conversation_id") @db.Uuid
+  seq            Int
+  senderId       String       @map("sender_id") @db.Uuid
+  body           String
+  editedAt       DateTime?    @map("edited_at")
+  deletedAt      DateTime?    @map("deleted_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, seq])
+  @@map("messages")
+}
+
+model Notification {
+  id             String           @id @default(uuid()) @db.Uuid
+  userId         String           @map("user_id") @db.Uuid
+  type           NotificationType
+  conversationId String?          @map("conversation_id") @db.Uuid
+  messageId      String?          @map("message_id") @db.Uuid
+  preview        String
+  readAt         DateTime?        @map("read_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("notifications")
+}

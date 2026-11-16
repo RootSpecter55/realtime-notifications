@@ -1,0 +1,44 @@
+{
+  "family": "realtime-notifications",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "${EXECUTION_ROLE_ARN}",
+  "taskRoleArn": "${TASK_ROLE_ARN}",
+  "containerDefinitions": [
+    {
+      "name": "api",
+      "image": "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/realtime-notifications:${IMAGE_TAG}",
+      "essential": true,
+      "portMappings": [{ "containerPort": 3000, "protocol": "tcp" }],
+      "environment": [
+        { "name": "NODE_ENV", "value": "production" },
+        { "name": "PORT", "value": "3000" },
+        { "name": "LOG_LEVEL", "value": "info" },
+        { "name": "SECRETS_SOURCE", "value": "aws" },
+        { "name": "SECRET_ID", "value": "${SECRET_ID}" },
+        { "name": "AWS_REGION", "value": "${AWS_REGION}" },
+        { "name": "JWT_EXPIRES_IN", "value": "1h" },
+        { "name": "PRESENCE_HEARTBEAT_SECONDS", "value": "25" },
+        { "name": "PRESENCE_TTL_SECONDS", "value": "60" },
+        { "name": "REPLAY_LIMIT", "value": "500" }
+      ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health > /dev/null || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 20
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/realtime-notifications",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "api"
+        }
+      }
+    }
+  ]
+}
